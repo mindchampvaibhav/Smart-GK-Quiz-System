@@ -1,0 +1,83 @@
+import random
+import csv
+import time
+
+total = 10
+correct= 0
+x = total
+num_list = []
+time_limit=120
+
+# Function to get a unique random number
+def get_unique_random(n, num_list):
+    for item in num_list:
+        if item == n:
+            n = random.randint(1, 50)
+    return n
+
+def question_loop(x, num_list, total, correct, starting_time):
+    starting_time = time.time() #stores the starting time
+    while (x > 0):
+        #Have to check the time before asking questions
+        time_elapsed=time.time() - starting_time
+        remaining_time=(time_limit) - (time_elapsed)
+
+        if remaining_time <= 0:
+            print("Time's up!")
+            break
+
+        print("Time remaining: ", int(remaining_time), " seconds")
+    
+        n = random.randint(1, 50)
+        n = get_unique_random(n, num_list)
+        num_list.append(n)
+        x = x - 1
+        try:
+            with open(r"Question_Bank.csv", 'r') as csvfile:
+                csv_reader = csv.reader(csvfile)
+
+                for row in csv_reader:
+                    question_number = int(row[0])
+                    if question_number == n:
+                        print("Q", (total - x), ": ", row[1])
+                        print("1.", row[2])
+                        print("2.", row[3])
+                        print("3.", row[4])
+                        print("4.", row[5])
+                        y = int(input("Enter your choice: "))
+
+                        while (y < 1) or (y > 4):
+                            if (y == 0):
+                                break
+                            print("Wrong Choice")
+                            y = int(input("Enter your choice: "))
+
+                        if (row[y + 1] == row[6]):
+                            print("Correct")
+                            correct = correct + 1
+        except FileNotFoundError:
+            print("File 'Question_Bank.csv' not found!")
+        except PermissionError:
+            print("Permission denied to open the file.")
+        except Exception as e:
+            print("Unexpected error: " + type(e).__name__ + " - " + str(e))
+        if (y == 0):
+            print("Exiting")
+            break
+    return correct
+
+correct = question_loop(x, num_list, total, correct)
+
+
+print("Correct answers ", correct, " out of ", total)
+print("Do you want to answer another set of 10 questions?")
+choice=input("Enter Y for Yes and N for No: ")
+if choice=='Y' or choice=='y':
+    # Reseting the variables
+    total = 10
+    x = total
+    # old num list values will carry forward
+    correct = question_loop(x, num_list, total, correct)
+    print("Correct answers ", correct, " out of 20")
+else:
+    print("Exiting")
