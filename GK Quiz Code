@@ -1,83 +1,97 @@
 import random
 import csv
 import time
+import streamlit as st
 
 total = 10
-correct= 0
-x = total
-num_list = []
-time_limit=120
+time_limit = 120
+csv_file = "Quiz Questions.csv"
+current_difficulty = 1
 
-# Function to get a unique random number
-def get_unique_random(n, num_list):
-    for item in num_list:
-        if item == n:
-            n = random.randint(1, 50)
-    return n
+st.title("Quiz App")
 
-def question_loop(x, num_list, total, correct, starting_time):
-    starting_time = time.time() #stores the starting time
-    while (x > 0):
-        #Have to check the time before asking questions
-        time_elapsed=time.time() - starting_time
-        remaining_time=(time_limit) - (time_elapsed)
-
-        if remaining_time <= 0:
-            print("Time's up!")
-            break
-
-        print("Time remaining: ", int(remaining_time), " seconds")
-    
-        n = random.randint(1, 50)
-        n = get_unique_random(n, num_list)
-        num_list.append(n)
-        x = x - 1
-        try:
-            with open(r"Question_Bank.csv", 'r') as csvfile:
-                csv_reader = csv.reader(csvfile)
-
-                for row in csv_reader:
-                    question_number = int(row[0])
-                    if question_number == n:
-                        print("Q", (total - x), ": ", row[1])
-                        print("1.", row[2])
-                        print("2.", row[3])
-                        print("3.", row[4])
-                        print("4.", row[5])
-                        y = int(input("Enter your choice: "))
-
-                        while (y < 1) or (y > 4):
-                            if (y == 0):
-                                break
-                            print("Wrong Choice")
-                            y = int(input("Enter your choice: "))
-
-                        if (row[y + 1] == row[6]):
-                            print("Correct")
-                            correct = correct + 1
-        except FileNotFoundError:
-            print("File 'Question_Bank.csv' not found!")
-        except PermissionError:
-            print("Permission denied to open the file.")
-        except Exception as e:
-            print("Unexpected error: " + type(e).__name__ + " - " + str(e))
-        if (y == 0):
-            print("Exiting")
-            break
-    return correct
-
-correct = question_loop(x, num_list, total, correct)
+def load_questions():
+    questions = []
+    try:
+        with open(csv_file, "r") as file:
+            csv_reader = csv.reader(file)
+            for row in csv_reader:
+                questions.append(row)
+    except FileNotFoundError:
+        st.error("File 'Question_Bank.csv' not found!")
+    return questions
+ 
+if "questions" not in st.session_state:
+    st.session_state.questions = load_questions() #Loads the list of questions from the CSV file.
+    st.session_state.used_numbers = [] #Keeps track of which questions have already been asked, so we don't repeat them.
+    st.session_state.correct = 0 #The score counter, starting at zero. Gets incremented by 1 every time the user answers correctly.
+    st.session_state.question_count = 0 #Tracks how many questions have been asked so far. When this hits 10, the quiz ends.
+    st.session_state.start_time = time.time() #Records the exact moment the quiz starts
+    st.session_state.current_question = None #No question has been fetched yet, so None.
+    st.session_state.finished = False #Means the quiz is still going
 
 
-print("Correct answers ", correct, " out of ", total)
-print("Do you want to answer another set of 10 questions?")
-choice=input("Enter Y for Yes and N for No: ")
-if choice=='Y' or choice=='y':
-    # Reseting the variables
-    total = 10
-    x = total
-    # old num list values will carry forward
-    correct = question_loop(x, num_list, total, correct)
-    print("Correct answers ", correct, " out of 20")
+
+def get_unique_random():
+    available = [
+        row for row in st.session_state.questions
+        if (int(row[0]) not in st.session_state.used_numbers) and (int(row[-1]) >= current_difficulty)
+    ]
+    if not available:
+        return None
+    return random.choice(available)
+
+if st.session_state.finished:
+    st.success("Correct answers:" + str(st.session_state.correct) + "out of" + str(st.session_state.question_count))
+    if st.button("Restart"):
+        st.session_state.clear()
+        st.rerun()
 else:
-    print("Exiting")
+    elapsed = time.time() - st.session_state.start_time
+    remaining = int(time_limit - elapsed)
+
+    if remaining <= 0:
+        st.warning("Time's up!")
+        st.session_state.finished = True
+        st.rerun()
+
+    st.write(f"Time remaining: {remaining} seconds")
+
+    if st.session_state.question_count >= total:
+        st.session_state.finished = True
+        st.rerun()
+
+    if st.session_state.current_question is None:
+        st.session_state.current_question = get_unique_random()
+
+    row = st.session_state.current_question
+
+    if row:
+        st.subheader(f"Q{st.session_state.question_count + 1}: {row[1]+" " + row[7]}")
+
+        choice = st.radio(
+            "Enter your choice:",
+            options=[1, 2, 3, 4],
+            format_func=lambda x: f"{x}. {row[x + 1]}"
+        )
+
+        if st.button("Submit"):
+            if row[choice + 1] == row[6]:
+                st.success("Correct")
+                current_difficulty = min(5, current_difficulty + 1)  # Increase difficulty for the next question
+                st.session_state.correct += 1
+            else:
+                st.error("Wrong answer")
+                current_difficulty = max(1, current_difficulty - 1)  # Decrease difficulty for the next question, but ensure it doesn't go below 1
+
+            st.session_state.used_numbers.append(int(row[0]))
+            st.session_state.question_count += 1
+            st.session_state.current_question = None
+            st.rerun()
+
+        if st.button("Exit"):
+            st.session_state.finished = True
+            st.rerun()
+    else:
+        st.info("No more questions available.")
+        st.session_state.finished = True
